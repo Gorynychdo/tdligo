@@ -1,27 +1,26 @@
-package client
+package tdclient
 
 import (
 	"fmt"
 
-	"github.com/Gorynychdo/tdligo.git/internal/model"
-
 	"github.com/Arman92/go-tdlib"
+	"github.com/Gorynychdo/tdligo.git/internal/model"
 	"github.com/pkg/errors"
 )
 
-// TelegramClient обертка над tdlib
-type TelegramClient struct {
-	client   *tdlib.Client
-	settings *model.TelegramSettings
+// TDClient tdlib wrap
+type TDClient struct {
+	client *tdlib.Client
+	config *model.TDConfig
 }
 
-// NewTelegramClient конструктор
-func NewTelegramClient() TelegramClient {
+// NewTDClient constructor
+func NewTDClient(config *model.TDConfig) TDClient {
 	tdlib.SetLogVerbosityLevel(1)
-	return TelegramClient{
+	return TDClient{
 		client: tdlib.NewClient(tdlib.Config{
-			APIID:              "api_id",
-			APIHash:            "api_hash",
+			APIID:              config.TelegramAPIID,
+			APIHash:            config.TelegramAPIHash,
 			SystemLanguageCode: "en",
 			DeviceModel:        "Server",
 			SystemVersion:      "1.0.0",
@@ -29,23 +28,20 @@ func NewTelegramClient() TelegramClient {
 			DatabaseDirectory:  "./tdlib-db",
 			IgnoreFileNames:    false,
 		}),
-		settings: &model.TelegramSettings{
-			Number:   "phone_number",
-			Password: "password",
-		},
+		config: config,
 	}
 }
 
-// Start запуск клиента на прослушивание событий
-func (c TelegramClient) Start() error {
+// Start TDClient
+func (c TDClient) Start() error {
 	if err := c.authorize(); err != nil {
 		return err
 	}
 	return c.listenForMessages()
 }
 
-// nolint:gocyclo // норм
-func (c TelegramClient) authorize() error {
+// nolint:gocyclo // ...
+func (c TDClient) authorize() error {
 	for {
 		state, err := c.client.Authorize()
 		if err != nil {
@@ -54,18 +50,18 @@ func (c TelegramClient) authorize() error {
 
 		switch state.GetAuthorizationStateEnum() {
 		case tdlib.AuthorizationStateWaitPhoneNumberType:
-			if _, err = c.client.SendPhoneNumber(c.settings.Number); err != nil {
+			if _, err = c.client.SendPhoneNumber(c.config.PhoneNumber); err != nil {
 				return errors.Wrap(err, "sending phone number")
 			}
 		case tdlib.AuthorizationStateWaitCodeType:
 			if err = c.setAuthCode(); err != nil {
 				return errors.Wrap(err, "setting auth code")
 			}
-			if _, err = c.client.SendAuthCode(c.settings.Code); err != nil {
+			if _, err = c.client.SendAuthCode(c.config.AuthCode); err != nil {
 				return errors.Wrap(err, "sending auth code")
 			}
 		case tdlib.AuthorizationStateWaitPasswordType:
-			if _, err = c.client.SendAuthPassword(c.settings.Password); err != nil {
+			if _, err = c.client.SendAuthPassword(c.config.AuthPassword); err != nil {
 				return errors.Wrap(err, "sending auth password")
 			}
 		case tdlib.AuthorizationStateReadyType:
@@ -75,16 +71,16 @@ func (c TelegramClient) authorize() error {
 	}
 }
 
-func (c TelegramClient) setAuthCode() error {
-	if c.settings.Code != "" {
+func (c TDClient) setAuthCode() error {
+	if c.config.AuthCode != "" {
 		return nil
 	}
 	fmt.Print("Enter code: ")
-	_, err := fmt.Scanln(&c.settings.Code)
+	_, err := fmt.Scanln(&c.config.AuthCode)
 	return err
 }
 
-func (c TelegramClient) listenForMessages() error {
+func (c TDClient) listenForMessages() error {
 	for update := range c.client.GetRawUpdatesChannel(100) {
 		fmt.Println(update.Data)
 		fmt.Print("\n\n")

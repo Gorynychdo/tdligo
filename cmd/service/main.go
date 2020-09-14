@@ -1,13 +1,29 @@
 package main
 
 import (
+	"flag"
 	"log"
 
-	"github.com/Gorynychdo/tdligo.git/internal/client"
+	"github.com/BurntSushi/toml"
+	"github.com/Gorynychdo/tdligo.git/internal/model"
+	"github.com/Gorynychdo/tdligo.git/internal/tdclient"
 )
 
+var configPath string
+
+func init() {
+	flag.StringVar(&configPath, "config_path", "configs/tdlib.toml", "path to config file")
+}
+
 func main() {
-	tc := client.NewTelegramClient()
+	flag.Parse()
+
+	config := new(model.TDConfig)
+	if _, err := toml.DecodeFile(configPath, config); err != nil {
+		log.Fatal(err)
+	}
+
+	tc := tdclient.NewTDClient(config)
 	if err := tc.Start(); err != nil {
 		log.Fatal(err)
 	}
