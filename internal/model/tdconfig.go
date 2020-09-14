@@ -1,6 +1,5 @@
 package model
 
-// TDConfig tdlib configuration
 type TDConfig struct {
 	TelegramAPIID   string `toml:"telegram_api_id"`
 	TelegramAPIHash string `toml:"telegram_api_hash"`

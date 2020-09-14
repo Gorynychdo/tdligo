@@ -1,6 +1,7 @@
 package tdclient
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/Arman92/go-tdlib"
@@ -8,13 +9,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-// TDClient tdlib wrap
 type TDClient struct {
 	client *tdlib.Client
 	config *model.TDConfig
 }
 
-// NewTDClient constructor
 func NewTDClient(config *model.TDConfig) TDClient {
 	tdlib.SetLogVerbosityLevel(1)
 	return TDClient{
@@ -32,7 +31,6 @@ func NewTDClient(config *model.TDConfig) TDClient {
 	}
 }
 
-// Start TDClient
 func (c TDClient) Start() error {
 	if err := c.authorize(); err != nil {
 		return err
@@ -40,7 +38,6 @@ func (c TDClient) Start() error {
 	return c.listenForMessages()
 }
 
-// nolint:gocyclo // ...
 func (c TDClient) authorize() error {
 	for {
 		state, err := c.client.Authorize()
@@ -82,8 +79,45 @@ func (c TDClient) setAuthCode() error {
 
 func (c TDClient) listenForMessages() error {
 	for update := range c.client.GetRawUpdatesChannel(100) {
-		fmt.Println(update.Data)
-		fmt.Print("\n\n")
+		if update.Data["@type"] != "updateNewMessage" {
+			continue
+		}
+
+		var data tdlib.UpdateNewMessage
+		if err := json.Unmarshal(update.Raw, &data); err != nil {
+			return errors.Wrap(err, "unmarshall data")
+		}
+		if err := c.handleMessage(data.Message); err != nil {
+			return err
+		}
 	}
+	return nil
+}
+
+func (c TDClient) handleMessage(message *tdlib.Message) error {
+	if message == nil || message.Content == nil || message.IsOutgoing {
+		return nil
+	}
+	content, ok := message.Content.(*tdlib.MessageText)
+	if !ok {
+		return nil
+	}
+
+	mes := &model.Message{
+		ID:               message.ID,
+		SenderUserID:     message.SenderUserID,
+		ChatID:           message.ChatID,
+		Date:             message.Date,
+		EditDate:         message.EditDate,
+		ReplyToMessageID: message.ReplyToMessageID,
+		Text:             content.Text.Text,
+	}
+
+	mesRow, err := json.Marshal(mes)
+	if err != nil {
+		return errors.Wrap(err, "marshall message")
+	}
+	fmt.Println(string(mesRow))
+
 	return nil
 }
