@@ -35,7 +35,7 @@ func (c TDClient) Start() error {
 	if err := c.authorize(); err != nil {
 		return err
 	}
-	return c.listenForMessages()
+	return c.listenAndServe()
 }
 
 func (c TDClient) authorize() error {
@@ -77,24 +77,28 @@ func (c TDClient) setAuthCode() error {
 	return err
 }
 
-func (c TDClient) listenForMessages() error {
-	for update := range c.client.GetRawUpdatesChannel(100) {
-		if update.Data["@type"] != "updateNewMessage" {
-			continue
-		}
-
-		var data tdlib.UpdateNewMessage
-		if err := json.Unmarshal(update.Raw, &data); err != nil {
-			return errors.Wrap(err, "unmarshall data")
-		}
-		if err := c.handleMessage(data.Message); err != nil {
-			return err
+func (c TDClient) listenAndServe() error {
+	for {
+		select {
+		case update := <-c.client.GetRawUpdatesChannel(100):
+			if err := c.handleIncoming(update); err != nil {
+				return err
+			}
 		}
 	}
-	return nil
 }
 
-func (c TDClient) handleMessage(message *tdlib.Message) error {
+func (c TDClient) handleIncoming(update tdlib.UpdateMsg) error {
+	if update.Data["@type"] != "updateNewMessage" {
+		return nil
+	}
+
+	var data tdlib.UpdateNewMessage
+	if err := json.Unmarshal(update.Raw, &data); err != nil {
+		return errors.Wrap(err, "unmarshall data")
+	}
+
+	message := data.Message
 	if message == nil || message.Content == nil || message.IsOutgoing {
 		return nil
 	}
@@ -129,4 +133,12 @@ func (c TDClient) handleMessage(message *tdlib.Message) error {
 	fmt.Println(string(mesRow))
 
 	return nil
+}
+
+func (c TDClient) SendMessage(chatID int64, text string) error {
+	message := &tdlib.InputMessageText{
+		Text: tdlib.NewFormattedText(text, nil),
+	}
+	_, err := c.client.SendMessage(chatID, 0, false, false, nil, message)
+	return err
 }
