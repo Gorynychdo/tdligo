@@ -103,14 +103,23 @@ func (c TDClient) handleMessage(message *tdlib.Message) error {
 		return nil
 	}
 
+	user, err := c.client.GetUser(message.SenderUserID)
+	if err != nil {
+		return errors.Wrap(err, "get user from id")
+	}
+
 	mes := &model.Message{
 		ID:               message.ID,
-		SenderUserID:     message.SenderUserID,
+		UserID:           message.SenderUserID,
 		ChatID:           message.ChatID,
 		Date:             message.Date,
 		EditDate:         message.EditDate,
 		ReplyToMessageID: message.ReplyToMessageID,
 		Text:             content.Text.Text,
+		Username:         user.Username,
+		UserPhone:        user.PhoneNumber,
+		UserFirst:        user.FirstName,
+		UserLast:         user.LastName,
 	}
 
 	mesRow, err := json.Marshal(mes)
