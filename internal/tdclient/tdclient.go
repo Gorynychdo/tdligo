@@ -3,6 +3,7 @@ package tdclient
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/Arman92/go-tdlib"
 	"github.com/Gorynychdo/tdligo.git/internal/model"
@@ -35,7 +36,8 @@ func (c TDClient) Start() error {
 	if err := c.authorize(); err != nil {
 		return err
 	}
-	return c.listenAndServe()
+	c.listenAndServe()
+	return nil
 }
 
 func (c TDClient) authorize() error {
@@ -77,12 +79,12 @@ func (c TDClient) setAuthCode() error {
 	return err
 }
 
-func (c TDClient) listenAndServe() error {
+func (c TDClient) listenAndServe() {
 	for {
 		select {
 		case update := <-c.client.GetRawUpdatesChannel(100):
 			if err := c.handleIncoming(update); err != nil {
-				return err
+				log.Println(err)
 			}
 		}
 	}
@@ -107,11 +109,6 @@ func (c TDClient) handleIncoming(update tdlib.UpdateMsg) error {
 		return nil
 	}
 
-	user, err := c.client.GetUser(message.SenderUserID)
-	if err != nil {
-		return errors.Wrap(err, "get user from id")
-	}
-
 	mes := &model.Message{
 		ID:               message.ID,
 		UserID:           message.SenderUserID,
@@ -120,10 +117,16 @@ func (c TDClient) handleIncoming(update tdlib.UpdateMsg) error {
 		EditDate:         message.EditDate,
 		ReplyToMessageID: message.ReplyToMessageID,
 		Text:             content.Text.Text,
-		Username:         user.Username,
-		UserPhone:        user.PhoneNumber,
-		UserFirst:        user.FirstName,
-		UserLast:         user.LastName,
+	}
+
+	user, err := c.client.GetUser(message.SenderUserID)
+	if err == nil {
+		mes.Username = user.Username
+		mes.UserPhone = user.PhoneNumber
+		mes.UserFirst = user.FirstName
+		mes.UserLast = user.LastName
+	} else {
+		log.Println(errors.Wrap(err, "get user from id"))
 	}
 
 	mesRow, err := json.Marshal(mes)
