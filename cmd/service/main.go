@@ -24,14 +24,14 @@ func main() {
 		log.Fatal(err)
 	}
 
+	tc := tdclient.NewTDClient(config)
 	go func() {
-		tc := tdclient.NewTDClient(config)
 		if err := tc.Start(); err != nil {
 			log.Fatal(err)
 		}
 	}()
 
-	srv := service.NewHTTPServer(config)
+	srv := service.NewHTTPServer(config, tc)
 	if err := srv.ServeHTTP(); err != nil {
 		log.Fatal(err)
 	}

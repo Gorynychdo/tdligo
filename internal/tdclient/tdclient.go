@@ -11,10 +11,8 @@ import (
 )
 
 type TDClient struct {
-	client   *tdlib.Client
-	config   *model.Config
-	sender   chan model.OutgoingMessage
-	receiver chan tdlib.UpdateMsg
+	client *tdlib.Client
+	config *model.Config
 }
 
 func NewTDClient(config *model.Config) *TDClient {
@@ -32,7 +30,6 @@ func NewTDClient(config *model.Config) *TDClient {
 		}),
 		config: config,
 	}
-	client.receiver = client.client.GetRawUpdatesChannel(100)
 	return client
 }
 
@@ -41,7 +38,7 @@ func (c *TDClient) Start() error {
 		return err
 	}
 	log.Println("Telegram client started")
-	c.listenAndServe()
+	c.listenIncoming()
 	return nil
 }
 
@@ -83,32 +80,25 @@ func (c *TDClient) setAuthCode() error {
 	return err
 }
 
-func (c *TDClient) listenAndServe() {
-	for {
-		select {
-		case update := <-c.receiver:
-			if err := c.handleIncoming(update); err != nil {
-				log.Println(errors.Wrap(err, "handle incoming message"))
-			}
-		case message := <-c.sender:
-			if err := c.sendMessage(message); err != nil {
-				log.Println(errors.Wrap(err, "send message"))
-			}
+func (c *TDClient) listenIncoming() {
+	for update := range c.client.GetRawUpdatesChannel(100) {
+		if update.Data["@type"] != "updateNewMessage" {
+			continue
+		}
+
+		var data tdlib.UpdateNewMessage
+		if err := json.Unmarshal(update.Raw, &data); err != nil {
+			log.Println(errors.Wrap(err, "unmarshall data"))
+			continue
+		}
+
+		if err := c.handleIncoming(data.Message); err != nil {
+			log.Println(errors.Wrap(err, "handle incoming message"))
 		}
 	}
 }
 
-func (c *TDClient) handleIncoming(update tdlib.UpdateMsg) error {
-	if update.Data["@type"] != "updateNewMessage" {
-		return nil
-	}
-
-	var data tdlib.UpdateNewMessage
-	if err := json.Unmarshal(update.Raw, &data); err != nil {
-		return errors.Wrap(err, "unmarshall data")
-	}
-
-	message := data.Message
+func (c *TDClient) handleIncoming(message *tdlib.Message) error {
 	if message == nil || message.Content == nil || message.IsOutgoing {
 		return nil
 	}
@@ -146,10 +136,8 @@ func (c *TDClient) handleIncoming(update tdlib.UpdateMsg) error {
 	return nil
 }
 
-func (c *TDClient) sendMessage(message model.OutgoingMessage) error {
-	content := &tdlib.InputMessageText{
-		Text: tdlib.NewFormattedText(message.Text, nil),
-	}
+func (c *TDClient) SendMessage(message model.OutgoingMessage) error {
+	content := tdlib.NewInputMessageText(tdlib.NewFormattedText(message.Text, nil), false, false)
 	_, err := c.client.SendMessage(message.ChatID, 0, false, false, nil, content)
 	return err
 }
