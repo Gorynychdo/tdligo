@@ -11,13 +11,15 @@ import (
 )
 
 type TDClient struct {
-	client *tdlib.Client
-	config *model.TDConfig
+	client   *tdlib.Client
+	config   *model.TDConfig
+	sender   chan model.OutgoingMessage
+	receiver chan tdlib.UpdateMsg
 }
 
 func NewTDClient(config *model.TDConfig) TDClient {
 	tdlib.SetLogVerbosityLevel(1)
-	return TDClient{
+	client := TDClient{
 		client: tdlib.NewClient(tdlib.Config{
 			APIID:              config.TelegramAPIID,
 			APIHash:            config.TelegramAPIHash,
@@ -30,6 +32,8 @@ func NewTDClient(config *model.TDConfig) TDClient {
 		}),
 		config: config,
 	}
+	client.receiver = client.client.GetRawUpdatesChannel(100)
+	return client
 }
 
 func (c TDClient) Start() error {
@@ -82,9 +86,13 @@ func (c TDClient) setAuthCode() error {
 func (c TDClient) listenAndServe() {
 	for {
 		select {
-		case update := <-c.client.GetRawUpdatesChannel(100):
+		case update := <-c.receiver:
 			if err := c.handleIncoming(update); err != nil {
-				log.Println(err)
+				log.Println(errors.Wrap(err, "handle incoming message"))
+			}
+		case message := <-c.sender:
+			if err := c.sendMessage(message); err != nil {
+				log.Println(errors.Wrap(err, "send message"))
 			}
 		}
 	}
@@ -109,7 +117,7 @@ func (c TDClient) handleIncoming(update tdlib.UpdateMsg) error {
 		return nil
 	}
 
-	mes := &model.Message{
+	mes := &model.IncomingMessage{
 		ID:               message.ID,
 		UserID:           message.SenderUserID,
 		ChatID:           message.ChatID,
@@ -138,10 +146,10 @@ func (c TDClient) handleIncoming(update tdlib.UpdateMsg) error {
 	return nil
 }
 
-func (c TDClient) SendMessage(chatID int64, text string) error {
-	message := &tdlib.InputMessageText{
-		Text: tdlib.NewFormattedText(text, nil),
+func (c TDClient) sendMessage(message model.OutgoingMessage) error {
+	content := &tdlib.InputMessageText{
+		Text: tdlib.NewFormattedText(message.Text, nil),
 	}
-	_, err := c.client.SendMessage(chatID, 0, false, false, nil, message)
+	_, err := c.client.SendMessage(message.ChatID, 0, false, false, nil, content)
 	return err
 }

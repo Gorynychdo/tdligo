@@ -1,6 +1,6 @@
 package model
 
-type Message struct {
+type IncomingMessage struct {
 	ID               int64  `json:"id"`
 	ChatID           int64  `json:"chat_id"`
 	ReplyToMessageID int64  `json:"reply_to_message_id"`
@@ -12,4 +12,9 @@ type Message struct {
 	UserPhone        string `json:"user_phone"`
 	UserFirst        string `json:"user_first"`
 	UserLast         string `json:"user_last"`
+}
+
+type OutgoingMessage struct {
+	ChatID int64  `json:"chat_id"`
+	Text   string `json:"text"`
 }
