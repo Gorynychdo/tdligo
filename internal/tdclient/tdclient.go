@@ -12,14 +12,14 @@ import (
 
 type TDClient struct {
 	client   *tdlib.Client
-	config   *model.TDConfig
+	config   *model.Config
 	sender   chan model.OutgoingMessage
 	receiver chan tdlib.UpdateMsg
 }
 
-func NewTDClient(config *model.TDConfig) TDClient {
+func NewTDClient(config *model.Config) *TDClient {
 	tdlib.SetLogVerbosityLevel(1)
-	client := TDClient{
+	client := &TDClient{
 		client: tdlib.NewClient(tdlib.Config{
 			APIID:              config.TelegramAPIID,
 			APIHash:            config.TelegramAPIHash,
@@ -36,15 +36,16 @@ func NewTDClient(config *model.TDConfig) TDClient {
 	return client
 }
 
-func (c TDClient) Start() error {
+func (c *TDClient) Start() error {
 	if err := c.authorize(); err != nil {
 		return err
 	}
+	log.Println("Telegram client started")
 	c.listenAndServe()
 	return nil
 }
 
-func (c TDClient) authorize() error {
+func (c *TDClient) authorize() error {
 	for {
 		state, err := c.client.Authorize()
 		if err != nil {
@@ -68,13 +69,12 @@ func (c TDClient) authorize() error {
 				return errors.Wrap(err, "sending auth password")
 			}
 		case tdlib.AuthorizationStateReadyType:
-			fmt.Println("Authorization Ready! Let's rock")
 			return nil
 		}
 	}
 }
 
-func (c TDClient) setAuthCode() error {
+func (c *TDClient) setAuthCode() error {
 	if c.config.AuthCode != "" {
 		return nil
 	}
@@ -83,7 +83,7 @@ func (c TDClient) setAuthCode() error {
 	return err
 }
 
-func (c TDClient) listenAndServe() {
+func (c *TDClient) listenAndServe() {
 	for {
 		select {
 		case update := <-c.receiver:
@@ -98,7 +98,7 @@ func (c TDClient) listenAndServe() {
 	}
 }
 
-func (c TDClient) handleIncoming(update tdlib.UpdateMsg) error {
+func (c *TDClient) handleIncoming(update tdlib.UpdateMsg) error {
 	if update.Data["@type"] != "updateNewMessage" {
 		return nil
 	}
@@ -146,7 +146,7 @@ func (c TDClient) handleIncoming(update tdlib.UpdateMsg) error {
 	return nil
 }
 
-func (c TDClient) sendMessage(message model.OutgoingMessage) error {
+func (c *TDClient) sendMessage(message model.OutgoingMessage) error {
 	content := &tdlib.InputMessageText{
 		Text: tdlib.NewFormattedText(message.Text, nil),
 	}

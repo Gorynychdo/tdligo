@@ -6,6 +6,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/Gorynychdo/tdligo.git/internal/model"
+	"github.com/Gorynychdo/tdligo.git/internal/service"
 	"github.com/Gorynychdo/tdligo.git/internal/tdclient"
 )
 
@@ -18,13 +19,20 @@ func init() {
 func main() {
 	flag.Parse()
 
-	config := new(model.TDConfig)
+	config := model.NewConfig()
 	if _, err := toml.DecodeFile(configPath, config); err != nil {
 		log.Fatal(err)
 	}
 
-	tc := tdclient.NewTDClient(config)
-	if err := tc.Start(); err != nil {
+	go func() {
+		tc := tdclient.NewTDClient(config)
+		if err := tc.Start(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	srv := service.NewHTTPServer(config)
+	if err := srv.ServeHTTP(); err != nil {
 		log.Fatal(err)
 	}
 }
