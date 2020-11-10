@@ -5,9 +5,9 @@ import (
 	"log"
 
 	"github.com/BurntSushi/toml"
-	"github.com/Gorynychdo/tdligo.git/internal/model"
-	"github.com/Gorynychdo/tdligo.git/internal/service"
-	"github.com/Gorynychdo/tdligo.git/internal/tdclient"
+	"github.com/Gorynychdo/tdligo/internal/model"
+	"github.com/Gorynychdo/tdligo/internal/service"
+	"github.com/Gorynychdo/tdligo/internal/tdclient"
 )
 
 var configPath string

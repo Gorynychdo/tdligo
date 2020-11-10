@@ -6,18 +6,19 @@ import (
 	"log"
 
 	"github.com/Arman92/go-tdlib"
-	"github.com/Gorynychdo/tdligo.git/internal/model"
+	"github.com/Gorynychdo/tdligo/internal/model"
 	"github.com/pkg/errors"
 )
 
 type TDClient struct {
 	client *tdlib.Client
 	config *model.Config
+	files  map[int32]*tdlib.File
 }
 
 func NewTDClient(config *model.Config) *TDClient {
 	tdlib.SetLogVerbosityLevel(1)
-	client := &TDClient{
+	return &TDClient{
 		client: tdlib.NewClient(tdlib.Config{
 			APIID:              config.TelegramAPIID,
 			APIHash:            config.TelegramAPIHash,
@@ -29,8 +30,8 @@ func NewTDClient(config *model.Config) *TDClient {
 			IgnoreFileNames:    false,
 		}),
 		config: config,
+		files:  make(map[int32]*tdlib.File),
 	}
-	return client
 }
 
 func (c *TDClient) Start() error {
@@ -82,31 +83,73 @@ func (c *TDClient) setAuthCode() error {
 
 func (c *TDClient) listenIncoming() {
 	for update := range c.client.GetRawUpdatesChannel(100) {
-		if update.Data["@type"] != "updateNewMessage" {
-			continue
-		}
-
-		var data tdlib.UpdateNewMessage
-		if err := json.Unmarshal(update.Raw, &data); err != nil {
-			log.Println(errors.Wrap(err, "unmarshall data"))
-			continue
-		}
-
-		if err := c.handleIncoming(data.Message); err != nil {
-			log.Println(errors.Wrap(err, "handle incoming message"))
+		switch update.Data["@type"] {
+		case string(tdlib.UpdateAuthorizationStateType):
+			log.Println(string(update.Raw))
+		case string(tdlib.UpdateNewMessageType):
+			var data tdlib.UpdateNewMessage
+			if err := json.Unmarshal(update.Raw, &data); err != nil {
+				log.Println(errors.Wrap(err, "unmarshall data"))
+				continue
+			}
+			if err := c.handleIncoming(data.Message); err != nil {
+				log.Println(errors.Wrap(err, "handle incoming message"))
+			}
+		case string(tdlib.UpdateFileType):
+			log.Println(string(update.Raw))
 		}
 	}
 }
 
 func (c *TDClient) handleIncoming(message *tdlib.Message) error {
-	if message == nil || message.Content == nil || message.IsOutgoing {
-		return nil
-	}
-	content, ok := message.Content.(*tdlib.MessageText)
-	if !ok {
+	if message == nil || message.IsOutgoing {
 		return nil
 	}
 
+	switch message.Content.(type) {
+	case *tdlib.MessageText:
+		return c.handleNewMessage(message)
+	case *tdlib.MessageDocument:
+		return c.handleNewFile(message)
+	}
+	return nil
+}
+
+func (c *TDClient) handleNewMessage(message *tdlib.Message) error {
+	mes := c.getMessage(message)
+	mes.Text = message.Content.(*tdlib.MessageText).Text.Text
+	mesRow, err := json.Marshal(mes)
+	if err == nil {
+		fmt.Println(string(mesRow))
+	}
+	return errors.Wrap(err, "marshall message")
+}
+
+func (c *TDClient) handleNewFile(message *tdlib.Message) error {
+	mes := c.getMessage(message)
+	content := message.Content.(*tdlib.MessageDocument)
+	document := content.Document
+	mes.Text = content.Caption.Text
+	file, err := c.client.DownloadFile(document.Document.ID, 1)
+	if err == nil {
+		mes.File = &model.File{
+			FileName: document.FileName,
+			MimeType: document.MimeType,
+			FilePath: file.Local.Path,
+			Size:     file.Size,
+		}
+	} else {
+		log.Println(errors.Wrap(err, "downloading file with id"))
+	}
+
+	mesRow, err := json.Marshal(mes)
+	if err == nil {
+		fmt.Println(string(mesRow))
+	}
+	return errors.Wrap(err, "marshall message")
+}
+
+func (c *TDClient) getMessage(message *tdlib.Message) *model.IncomingMessage {
 	mes := &model.IncomingMessage{
 		ID:               message.ID,
 		UserID:           message.SenderUserID,
@@ -114,7 +157,6 @@ func (c *TDClient) handleIncoming(message *tdlib.Message) error {
 		Date:             message.Date,
 		EditDate:         message.EditDate,
 		ReplyToMessageID: message.ReplyToMessageID,
-		Text:             content.Text.Text,
 	}
 
 	user, err := c.client.GetUser(message.SenderUserID)
@@ -126,14 +168,7 @@ func (c *TDClient) handleIncoming(message *tdlib.Message) error {
 	} else {
 		log.Println(errors.Wrap(err, "get user from id"))
 	}
-
-	mesRow, err := json.Marshal(mes)
-	if err != nil {
-		return errors.Wrap(err, "marshall message")
-	}
-	fmt.Println(string(mesRow))
-
-	return nil
+	return mes
 }
 
 func (c *TDClient) SendMessage(message model.OutgoingMessage) error {

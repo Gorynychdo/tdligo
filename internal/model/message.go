@@ -12,6 +12,14 @@ type IncomingMessage struct {
 	UserPhone        string `json:"user_phone"`
 	UserFirst        string `json:"user_first"`
 	UserLast         string `json:"user_last"`
+	File             *File  `json:"file"`
+}
+
+type File struct {
+	FileName string `json:"file_name"`
+	FilePath string `json:"file_path"`
+	MimeType string `json:"mime_type"`
+	Size     int32  `json:"size"`
 }
 
 type OutgoingMessage struct {

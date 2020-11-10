@@ -1,4 +1,4 @@
-module github.com/Gorynychdo/tdligo.git
+module github.com/Gorynychdo/tdligo
 
 go 1.15
 

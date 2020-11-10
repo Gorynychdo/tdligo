@@ -6,8 +6,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/Gorynychdo/tdligo.git/internal/model"
-	"github.com/Gorynychdo/tdligo.git/internal/tdclient"
+	"github.com/Gorynychdo/tdligo/internal/model"
+	"github.com/Gorynychdo/tdligo/internal/tdclient"
 	"github.com/go-chi/chi"
 	"github.com/pkg/errors"
 )
